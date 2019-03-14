@@ -8,7 +8,7 @@
 
 # 下面的方法（非生成器）会将所有的值翻倍，并存在double_arr变量中
 # 如果iterable很大的话，double_arr将是巨大的
-def double_arr(iterable):
+def double_numbers(iterable):
     double_arr = []
     for i in iterable:
         double_arr.append(i + i)
@@ -73,6 +73,7 @@ print(','.join(get_fruits()))
 # 下面的例子里面beg装饰了say
 # Beg会调用say 如果say_please是True，那么beg会修改say的返回值
 # message
+from functools import wraps
 def beg(target_function):
     @wraps(target_function)
     def wrapper(*args, **kwargs):

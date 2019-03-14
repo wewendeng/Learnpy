@@ -35,19 +35,19 @@ class Human(object):
 
     # 属性有点像getter
     # 这个将age()方法变成同名的只读属性（调用的时候不用加括号了）
-    @property
-    def age(self):
+    #@property
+    #def age(self):
         return self._age 
 
     # 这样就允许属性被赋值了
-    @age.setter
-    def age(self, age):
+    #@age.setter
+    #def age(self, age):
         self._age = age
 
     # 这样就允许属性被删除
-    @age.deleter
-    def age(self):
-        del self._age 
+   # @age.deleter
+    #def age(self):
+    #    del self._age 
 
 # 实例化一个类
 i = Human(name="Ian")
@@ -74,4 +74,4 @@ print(i.age) # =42
 
 # 删除属性
 del i.age
-print(i.age)
+#print(i.age)
