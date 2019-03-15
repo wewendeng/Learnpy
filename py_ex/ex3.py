@@ -66,6 +66,6 @@ finally: # 表示最后一定会执行的
     print("We can clean resources here")
 
 # 除了使用try/finall之外，我们可以适当的使用 with 语句进行简化
-with open("myfile.txt") as f:
-    for line in f:
-        print(line)
+# with open("myfile.txt") as f:
+#     for line in f:
+#         print(line)

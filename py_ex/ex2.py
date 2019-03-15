@@ -1,9 +1,10 @@
 
+
 # Python的print语句
 print("I am python")
 # 从控制台获取输入的简便方法
-input_string_var = raw_input(
-    "Enter some data") # 返回字符串
+# input_string_var = raw_input(
+#    "Enter some data") # 返回字符串
 input_var = input("Enter some data") # 把输入作为Python代码执行
 # 警告：使用input方法是必须小心
 # Python3没有raw_input方法，只有input方法
@@ -13,7 +14,7 @@ some_var = 5 # 一般使用_去给变量分词
 print(some_var) # 5
 
 # 没有定义的变量会抛出异常
-print(some_other_var) # Raises a name error
+# print(some_other_var) # Raises a name error
 
 # if可以作为表达式使用
 print("yahoo!" if 3 > 2 else 2) # "yahoo!"
@@ -76,7 +77,7 @@ print(li.remove(2)) # [1, 3, 4, 5, 6]
 print(li.insert(1, 2)) # [1, 2, 3, 4, 5, 6]
 # 返回第一个满足条件的值的索引
 print(li.index(2)) # 1
-print(li.index(7)) # 抛出ValueErro，7不在列表内
+# print(li.index(7)) # 抛出ValueErro，7不在列表内
 # 用‘in’来检查值是否为列表中
 print(1 in li) # Ture
 # 用‘len（）’来返回列表的长度
