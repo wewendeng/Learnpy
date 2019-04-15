@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <style>body {
+	font-family: Helvetica, Arial, sans-serif;
+	font-size: 12px;
+	min-width: 1200px;
+	color: #999;
+}
+h2 {
+	font-size: 16px;
+	color: black;
+}
+
+p {
+    color: black;
+}
+
+a {
+	color: #999;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+/******************************
+ * SUMMARY INFORMATION
+ ******************************/
+
+#environment td {
+	padding: 5px;
+	border: 1px solid #E6E6E6;
+}
+
+#environment tr:nth-child(odd) {
+	background-color: #f6f6f6;
+}
+
+/******************************
+ * TEST RESULT COLORS
+ ******************************/
+span.passed, .passed .col-result {
+	color: green;
+}
+span.skipped, span.xfailed, span.rerun, .skipped .col-result, .xfailed .col-result, .rerun .col-result {
+	color: orange;
+}
+span.error, span.failed, span.xpassed, .error .col-result, .failed .col-result, .xpassed .col-result  {
+	color: red;
+}
+
+
+/******************************
+ * RESULTS TABLE
+ *
+ * 1. Table Layout
+ * 2. Extra
+ * 3. Sorting items
+ *
+ ******************************/
+
+/*------------------
+ * 1. Table Layout
+ *------------------*/
+
+#results-table {
+	border: 1px solid #e6e6e6;
+	color: #999;
+	font-size: 12px;
+	width: 100%
+}
+
+#results-table th, #results-table td {
+	padding: 5px;
+	border: 1px solid #E6E6E6;
+	text-align: left
+}
+#results-table th {
+	font-weight: bold
+}
+
+/*------------------
+ * 2. Extra
+ *------------------*/
+
+.log:only-child {
+	height: inherit
+}
+.log {
+	background-color: #e6e6e6;
+	border: 1px solid #e6e6e6;
+	color: black;
+	display: block;
+	font-family: "Courier New", Courier, monospace;
+	height: 230px;
+	overflow-y: scroll;
+	padding: 5px;
+	white-space: pre-wrap
+}
+div.image {
+	border: 1px solid #e6e6e6;
+	float: right;
+	height: 240px;
+	margin-left: 5px;
+	overflow: hidden;
+	width: 320px
+}
+div.image img {
+	width: 320px
+}
+.collapsed {
+	display: none;
+}
+.expander::after {
+	content: " (show details)";
+	color: #BBB;
+	font-style: italic;
+	cursor: pointer;
+}
+.collapser::after {
+	content: " (hide details)";
+	color: #BBB;
+	font-style: italic;
+	cursor: pointer;
+}
+
+/*------------------
+ * 3. Sorting items
+ *------------------*/
+.sortable {
+	cursor: pointer;
+}
+
+.sort-icon {
+	font-size: 0px;
+	float: left;
+	margin-right: 5px;
+	margin-top: 5px;
+	/*triangle*/
+	width: 0;
+	height: 0;
+	border-left: 8px solid transparent;
+	border-right: 8px solid transparent;
+}
+
+.inactive .sort-icon {
+	/*finish triangle*/
+	border-top: 8px solid #E6E6E6;
+}
+
+.asc.active .sort-icon {
+	/*finish triangle*/
+	border-bottom: 8px solid #999;
+}
+
+.desc.active .sort-icon {
+	/*finish triangle*/
+	border-top: 8px solid #999;
+}
+</style></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function find_all(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sort_column(elem) {
+    toggle_sort_states(elem);
+    var colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    var key;
+    if (elem.classList.contains('numeric')) {
+        key = key_num;
+    } else if (elem.classList.contains('result')) {
+        key = key_result;
+    } else {
+        key = key_alpha;
+    }
+    sort_table(elem, key(colIndex));
+}
+
+function show_all_extras() {
+    find_all('.col-result').forEach(show_extras);
+}
+
+function hide_all_extras() {
+    find_all('.col-result').forEach(hide_extras);
+}
+
+function show_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.remove("collapsed");
+    expandcollapse.classList.remove("expander");
+    expandcollapse.classList.add("collapser");
+}
+
+function hide_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.add("collapsed");
+    expandcollapse.classList.remove("collapser");
+    expandcollapse.classList.add("expander");
+}
+
+function show_filters() {
+    var filter_items = document.getElementsByClassName('filter');
+    for (var i = 0; i < filter_items.length; i++)
+        filter_items[i].hidden = false;
+}
+
+function add_collapse() {
+    // Add links for show/hide all
+    var resulttable = find('table#results-table');
+    var showhideall = document.createElement("p");
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">Show all details</a> / ' +
+                            '<a href="javascript:hide_all_extras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    find_all('.col-result').forEach(function(elem) {
+        var extras = elem.parentNode.nextElementSibling;
+        var expandcollapse = document.createElement("span");
+        if (elem.innerHTML === 'Passed') {
+            extras.classList.add("collapsed");
+            expandcollapse.classList.add("expander");
+        } else {
+            expandcollapse.classList.add("collapser");
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener("click", function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains("collapsed")) {
+                show_extras(event.currentTarget);
+            } else {
+                hide_extras(event.currentTarget);
+            }
+        });
+    })
+}
+
+function init () {
+    reset_sort_headers();
+
+    add_collapse();
+
+    show_filters();
+
+    toggle_sort_states(find('.initial-sort'));
+
+    find_all('.sortable').forEach(function(elem) {
+        elem.addEventListener("click",
+                              function(event) {
+                                  sort_column(elem);
+                              }, false)
+    });
+
+};
+
+function sort_table(clicked, key_func) {
+    var rows = find_all('.results-table-row');
+    var reversed = !clicked.classList.contains('asc');
+    var sorted_rows = sort(rows, key_func, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    var thead = document.getElementById("results-table-head");
+    document.getElementById('results-table').remove();
+    var parent = document.createElement("table");
+    parent.id = "results-table";
+    parent.appendChild(thead);
+    sorted_rows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName("BODY")[0].appendChild(parent);
+}
+
+function sort(items, key_func, reversed) {
+    var sort_array = items.map(function(item, i) {
+        return [key_func(item), i];
+    });
+    var multiplier = reversed ? -1 : 1;
+
+    sort_array.sort(function(a, b) {
+        var key_a = a[0];
+        var key_b = b[0];
+        return multiplier * (key_a >= key_b ? 1 : -1);
+    });
+
+    return sort_array.map(function(item) {
+        var index = item[1];
+        return items[index];
+    });
+}
+
+function key_alpha(col_index) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[col_index].firstChild.data.toLowerCase();
+    };
+}
+
+function key_num(col_index) {
+    return function(elem) {
+        return parseFloat(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function key_result(col_index) {
+    return function(elem) {
+        var strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+                       'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function reset_sort_headers() {
+    find_all('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    find_all('.sortable').forEach(function(elem) {
+        var icon = document.createElement("div");
+        icon.className = "sort-icon";
+        icon.textContent = "vvv";
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove("desc", "active");
+        elem.classList.add("asc", "inactive");
+    });
+}
+
+function toggle_sort_states(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        reset_sort_headers();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function is_all_rows_hidden(value) {
+  return value.hidden == false;
+}
+
+function filter_table(elem) {
+    var outcome_att = "data-test-result";
+    var outcome = elem.getAttribute(outcome_att);
+    class_outcome = outcome + " results-table-row";
+    var outcome_rows = document.getElementsByClassName(class_outcome);
+
+    for(var i = 0; i < outcome_rows.length; i++){
+        outcome_rows[i].hidden = !elem.checked;
+    }
+
+    var rows = find_all('.results-table-row').filter(is_all_rows_hidden);
+    var all_rows_hidden = rows.length == 0 ? true : false;
+    var not_found_message = document.getElementById("not-found-message");
+    not_found_message.hidden = !all_rows_hidden;
+}
+</script>
+    <p>Report generated on 08-Mar-2018 at 19:38:27 by<a href="https://pypi.python.org/pypi/pytest-html"> pytest-html</a> v1.16.1</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>JAVA_HOME</td>
+        <td>D:\Java\jdk1.8.0_144</td></tr>
+      <tr>
+        <td>Packages</td>
+        <td>{&apos;pytest&apos;: &apos;3.3.1&apos;, &apos;py&apos;: &apos;1.5.2&apos;, &apos;pluggy&apos;: &apos;0.6.0&apos;}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.16299-SP0</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{&apos;rerunfailures&apos;: &apos;4.0&apos;, &apos;metadata&apos;: &apos;1.5.1&apos;, &apos;html&apos;: &apos;1.16.1&apos;}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.6.3</td></tr></table>
+    <h2>Summary</h2>
+    <p>7 tests ran in 16.27 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="passed">1 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="failed">6 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>, <input checked="true" class="filter" data-test-result="rerun" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="rerun">18 rerun</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable numeric" col="duration">Duration</th>
+          <th>Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_case/test_baidu_search.py::test_baidu_a_setting</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="image/test_baidu_search.py_test_baidu_a_setting.png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    def test_baidu_a_setting(browser):<br/>&gt;       bd = BaiduPage(browser)<br/><br/>test_case\test_baidu_search.py:15: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;page_obj.baidu_page.BaiduPage object at 0x00000251CE92C080&gt;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    def __init__(self, browser=&#x27;ff&#x27;):<br/>        &#x27;&#x27;&#x27;<br/>            Run class initialization method, the default is proper<br/>            to drive the Firefox browser. Of course, you can also<br/>            pass parameter for other browser, Chrome browser for the &quot;Chrome&quot;,<br/>            the Internet Explorer browser for &quot;internet explorer&quot; or &quot;ie&quot;.<br/>            &#x27;&#x27;&#x27;<br/>        if browser == &quot;firefox&quot; or browser == &quot;ff&quot;:<br/>            self.driver = webdriver.Firefox()<br/>        elif browser == &quot;chrome&quot;:<br/>            self.driver = webdriver.Chrome()<br/>        elif browser == &quot;internet explorer&quot; or browser == &quot;ie&quot;:<br/>            self.driver = webdriver.Ie()<br/>        elif browser == &quot;opera&quot;:<br/>            self.driver = webdriver.Opera()<br/>        elif browser == &quot;chrome_headless&quot;:<br/>            chrome_options = Options()<br/>            chrome_options.add_argument(&#x27;--headless&#x27;)<br/>            self.driver = webdriver.Chrome(chrome_options=chrome_options)<br/>        elif browser == &#x27;edge&#x27;:<br/>            self.driver = webdriver.Edge()<br/>        else:<br/>            raise NameError(<br/>&gt;               &quot;Not found %s browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.&quot; % browser)<br/><span class="error">E           NameError: Not found &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt; browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.</span><br/><br/>page_obj\webdriver2.py:47: NameError<br/>------------------------------ Captured log setup ------------------------------<br/>remote_connection.py       480 DEBUG    POST http://127.0.0.1:50799/session {&quot;capabilities&quot;: {&quot;firstMatch&quot;: [{}], &quot;alwaysMatch&quot;: {&quot;browserName&quot;: &quot;chrome&quot;, &quot;platformName&quot;: &quot;any&quot;, &quot;goog:chromeOptions&quot;: {&quot;extensions&quot;: [], &quot;args&quot;: []}}}, &quot;desiredCapabilities&quot;: {&quot;browserName&quot;: &quot;chrome&quot;, &quot;version&quot;: &quot;&quot;, &quot;platform&quot;: &quot;ANY&quot;, &quot;goog:chromeOptions&quot;: {&quot;extensions&quot;: [], &quot;args&quot;: []}}}
+remote_connection.py       567 DEBUG    Finished Request</div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_case/test_baidu_search.py::test_baidu_search[python]</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="image/test_baidu_search.py_test_baidu_search[python].png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">searchkey = &#x27;python&#x27;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    @pytest.mark.parametrize(<br/>        (&quot;searchkey&quot;),<br/>        [&quot;python&quot;, &quot;pytest&quot;,&quot;pytest-html&quot;,&quot;selenium&quot;,&quot;unittest&quot;]<br/>        )<br/>    def test_baidu_search(searchkey, browser):<br/>&gt;       bd= BaiduPage(browser)<br/><br/>test_case\test_baidu_search.py:28: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;page_obj.baidu_page.BaiduPage object at 0x00000251CE934438&gt;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    def __init__(self, browser=&#x27;ff&#x27;):<br/>        &#x27;&#x27;&#x27;<br/>            Run class initialization method, the default is proper<br/>            to drive the Firefox browser. Of course, you can also<br/>            pass parameter for other browser, Chrome browser for the &quot;Chrome&quot;,<br/>            the Internet Explorer browser for &quot;internet explorer&quot; or &quot;ie&quot;.<br/>            &#x27;&#x27;&#x27;<br/>        if browser == &quot;firefox&quot; or browser == &quot;ff&quot;:<br/>            self.driver = webdriver.Firefox()<br/>        elif browser == &quot;chrome&quot;:<br/>            self.driver = webdriver.Chrome()<br/>        elif browser == &quot;internet explorer&quot; or browser == &quot;ie&quot;:<br/>            self.driver = webdriver.Ie()<br/>        elif browser == &quot;opera&quot;:<br/>            self.driver = webdriver.Opera()<br/>        elif browser == &quot;chrome_headless&quot;:<br/>            chrome_options = Options()<br/>            chrome_options.add_argument(&#x27;--headless&#x27;)<br/>            self.driver = webdriver.Chrome(chrome_options=chrome_options)<br/>        elif browser == &#x27;edge&#x27;:<br/>            self.driver = webdriver.Edge()<br/>        else:<br/>            raise NameError(<br/>&gt;               &quot;Not found %s browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.&quot; % browser)<br/><span class="error">E           NameError: Not found &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt; browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.</span><br/><br/>page_obj\webdriver2.py:47: NameError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_case/test_baidu_search.py::test_baidu_search[pytest]</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="image/test_baidu_search.py_test_baidu_search[pytest].png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">searchkey = &#x27;pytest&#x27;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    @pytest.mark.parametrize(<br/>        (&quot;searchkey&quot;),<br/>        [&quot;python&quot;, &quot;pytest&quot;,&quot;pytest-html&quot;,&quot;selenium&quot;,&quot;unittest&quot;]<br/>        )<br/>    def test_baidu_search(searchkey, browser):<br/>&gt;       bd= BaiduPage(browser)<br/><br/>test_case\test_baidu_search.py:28: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;page_obj.baidu_page.BaiduPage object at 0x00000251CE98CCF8&gt;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    def __init__(self, browser=&#x27;ff&#x27;):<br/>        &#x27;&#x27;&#x27;<br/>            Run class initialization method, the default is proper<br/>            to drive the Firefox browser. Of course, you can also<br/>            pass parameter for other browser, Chrome browser for the &quot;Chrome&quot;,<br/>            the Internet Explorer browser for &quot;internet explorer&quot; or &quot;ie&quot;.<br/>            &#x27;&#x27;&#x27;<br/>        if browser == &quot;firefox&quot; or browser == &quot;ff&quot;:<br/>            self.driver = webdriver.Firefox()<br/>        elif browser == &quot;chrome&quot;:<br/>            self.driver = webdriver.Chrome()<br/>        elif browser == &quot;internet explorer&quot; or browser == &quot;ie&quot;:<br/>            self.driver = webdriver.Ie()<br/>        elif browser == &quot;opera&quot;:<br/>            self.driver = webdriver.Opera()<br/>        elif browser == &quot;chrome_headless&quot;:<br/>            chrome_options = Options()<br/>            chrome_options.add_argument(&#x27;--headless&#x27;)<br/>            self.driver = webdriver.Chrome(chrome_options=chrome_options)<br/>        elif browser == &#x27;edge&#x27;:<br/>            self.driver = webdriver.Edge()<br/>        else:<br/>            raise NameError(<br/>&gt;               &quot;Not found %s browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.&quot; % browser)<br/><span class="error">E           NameError: Not found &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt; browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.</span><br/><br/>page_obj\webdriver2.py:47: NameError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_case/test_baidu_search.py::test_baidu_search[pytest-html]</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="image/test_baidu_search.py_test_baidu_search[pytest-html].png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">searchkey = &#x27;pytest-html&#x27;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    @pytest.mark.parametrize(<br/>        (&quot;searchkey&quot;),<br/>        [&quot;python&quot;, &quot;pytest&quot;,&quot;pytest-html&quot;,&quot;selenium&quot;,&quot;unittest&quot;]<br/>        )<br/>    def test_baidu_search(searchkey, browser):<br/>&gt;       bd= BaiduPage(browser)<br/><br/>test_case\test_baidu_search.py:28: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;page_obj.baidu_page.BaiduPage object at 0x00000251CE9C03C8&gt;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    def __init__(self, browser=&#x27;ff&#x27;):<br/>        &#x27;&#x27;&#x27;<br/>            Run class initialization method, the default is proper<br/>            to drive the Firefox browser. Of course, you can also<br/>            pass parameter for other browser, Chrome browser for the &quot;Chrome&quot;,<br/>            the Internet Explorer browser for &quot;internet explorer&quot; or &quot;ie&quot;.<br/>            &#x27;&#x27;&#x27;<br/>        if browser == &quot;firefox&quot; or browser == &quot;ff&quot;:<br/>            self.driver = webdriver.Firefox()<br/>        elif browser == &quot;chrome&quot;:<br/>            self.driver = webdriver.Chrome()<br/>        elif browser == &quot;internet explorer&quot; or browser == &quot;ie&quot;:<br/>            self.driver = webdriver.Ie()<br/>        elif browser == &quot;opera&quot;:<br/>            self.driver = webdriver.Opera()<br/>        elif browser == &quot;chrome_headless&quot;:<br/>            chrome_options = Options()<br/>            chrome_options.add_argument(&#x27;--headless&#x27;)<br/>            self.driver = webdriver.Chrome(chrome_options=chrome_options)<br/>        elif browser == &#x27;edge&#x27;:<br/>            self.driver = webdriver.Edge()<br/>        else:<br/>            raise NameError(<br/>&gt;               &quot;Not found %s browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.&quot; % browser)<br/><span class="error">E           NameError: Not found &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt; browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.</span><br/><br/>page_obj\webdriver2.py:47: NameError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_case/test_baidu_search.py::test_baidu_search[selenium]</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="image/test_baidu_search.py_test_baidu_search[selenium].png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">searchkey = &#x27;selenium&#x27;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    @pytest.mark.parametrize(<br/>        (&quot;searchkey&quot;),<br/>        [&quot;python&quot;, &quot;pytest&quot;,&quot;pytest-html&quot;,&quot;selenium&quot;,&quot;unittest&quot;]<br/>        )<br/>    def test_baidu_search(searchkey, browser):<br/>&gt;       bd= BaiduPage(browser)<br/><br/>test_case\test_baidu_search.py:28: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;page_obj.baidu_page.BaiduPage object at 0x00000251CE9D57F0&gt;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    def __init__(self, browser=&#x27;ff&#x27;):<br/>        &#x27;&#x27;&#x27;<br/>            Run class initialization method, the default is proper<br/>            to drive the Firefox browser. Of course, you can also<br/>            pass parameter for other browser, Chrome browser for the &quot;Chrome&quot;,<br/>            the Internet Explorer browser for &quot;internet explorer&quot; or &quot;ie&quot;.<br/>            &#x27;&#x27;&#x27;<br/>        if browser == &quot;firefox&quot; or browser == &quot;ff&quot;:<br/>            self.driver = webdriver.Firefox()<br/>        elif browser == &quot;chrome&quot;:<br/>            self.driver = webdriver.Chrome()<br/>        elif browser == &quot;internet explorer&quot; or browser == &quot;ie&quot;:<br/>            self.driver = webdriver.Ie()<br/>        elif browser == &quot;opera&quot;:<br/>            self.driver = webdriver.Opera()<br/>        elif browser == &quot;chrome_headless&quot;:<br/>            chrome_options = Options()<br/>            chrome_options.add_argument(&#x27;--headless&#x27;)<br/>            self.driver = webdriver.Chrome(chrome_options=chrome_options)<br/>        elif browser == &#x27;edge&#x27;:<br/>            self.driver = webdriver.Edge()<br/>        else:<br/>            raise NameError(<br/>&gt;               &quot;Not found %s browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.&quot; % browser)<br/><span class="error">E           NameError: Not found &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt; browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.</span><br/><br/>page_obj\webdriver2.py:47: NameError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_case/test_baidu_search.py::test_baidu_search[unittest]</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="image/test_baidu_search.py_test_baidu_search[unittest].png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">searchkey = &#x27;unittest&#x27;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    @pytest.mark.parametrize(<br/>        (&quot;searchkey&quot;),<br/>        [&quot;python&quot;, &quot;pytest&quot;,&quot;pytest-html&quot;,&quot;selenium&quot;,&quot;unittest&quot;]<br/>        )<br/>    def test_baidu_search(searchkey, browser):<br/>&gt;       bd= BaiduPage(browser)<br/><br/>test_case\test_baidu_search.py:28: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;page_obj.baidu_page.BaiduPage object at 0x00000251CEA003C8&gt;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    def __init__(self, browser=&#x27;ff&#x27;):<br/>        &#x27;&#x27;&#x27;<br/>            Run class initialization method, the default is proper<br/>            to drive the Firefox browser. Of course, you can also<br/>            pass parameter for other browser, Chrome browser for the &quot;Chrome&quot;,<br/>            the Internet Explorer browser for &quot;internet explorer&quot; or &quot;ie&quot;.<br/>            &#x27;&#x27;&#x27;<br/>        if browser == &quot;firefox&quot; or browser == &quot;ff&quot;:<br/>            self.driver = webdriver.Firefox()<br/>        elif browser == &quot;chrome&quot;:<br/>            self.driver = webdriver.Chrome()<br/>        elif browser == &quot;internet explorer&quot; or browser == &quot;ie&quot;:<br/>            self.driver = webdriver.Ie()<br/>        elif browser == &quot;opera&quot;:<br/>            self.driver = webdriver.Opera()<br/>        elif browser == &quot;chrome_headless&quot;:<br/>            chrome_options = Options()<br/>            chrome_options.add_argument(&#x27;--headless&#x27;)<br/>            self.driver = webdriver.Chrome(chrome_options=chrome_options)<br/>        elif browser == &#x27;edge&#x27;:<br/>            self.driver = webdriver.Edge()<br/>        else:<br/>            raise NameError(<br/>&gt;               &quot;Not found %s browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.&quot; % browser)<br/><span class="error">E           NameError: Not found &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt; browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.</span><br/><br/>page_obj\webdriver2.py:47: NameError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-name">test_case/test_baidu_search.py::test_baidu_a_setting</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="image/test_baidu_search.py_test_baidu_a_setting.png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    def test_baidu_a_setting(browser):<br/>&gt;       bd = BaiduPage(browser)<br/><br/>test_case\test_baidu_search.py:15: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;page_obj.baidu_page.BaiduPage object at 0x00000251CE86ADA0&gt;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    def __init__(self, browser=&#x27;ff&#x27;):<br/>        &#x27;&#x27;&#x27;<br/>            Run class initialization method, the default is proper<br/>            to drive the Firefox browser. Of course, you can also<br/>            pass parameter for other browser, Chrome browser for the &quot;Chrome&quot;,<br/>            the Internet Explorer browser for &quot;internet explorer&quot; or &quot;ie&quot;.<br/>            &#x27;&#x27;&#x27;<br/>        if browser == &quot;firefox&quot; or browser == &quot;ff&quot;:<br/>            self.driver = webdriver.Firefox()<br/>        elif browser == &quot;chrome&quot;:<br/>            self.driver = webdriver.Chrome()<br/>        elif browser == &quot;internet explorer&quot; or browser == &quot;ie&quot;:<br/>            self.driver = webdriver.Ie()<br/>        elif browser == &quot;opera&quot;:<br/>            self.driver = webdriver.Opera()<br/>        elif browser == &quot;chrome_headless&quot;:<br/>            chrome_options = Options()<br/>            chrome_options.add_argument(&#x27;--headless&#x27;)<br/>            self.driver = webdriver.Chrome(chrome_options=chrome_options)<br/>        elif browser == &#x27;edge&#x27;:<br/>            self.driver = webdriver.Edge()<br/>        else:<br/>            raise NameError(<br/>&gt;               &quot;Not found %s browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.&quot; % browser)<br/><span class="error">E           NameError: Not found &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt; browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.</span><br/><br/>page_obj\webdriver2.py:47: NameError<br/>------------------------------ Captured log setup ------------------------------<br/>remote_connection.py       480 DEBUG    POST http://127.0.0.1:50799/session {&quot;capabilities&quot;: {&quot;firstMatch&quot;: [{}], &quot;alwaysMatch&quot;: {&quot;browserName&quot;: &quot;chrome&quot;, &quot;platformName&quot;: &quot;any&quot;, &quot;goog:chromeOptions&quot;: {&quot;extensions&quot;: [], &quot;args&quot;: []}}}, &quot;desiredCapabilities&quot;: {&quot;browserName&quot;: &quot;chrome&quot;, &quot;version&quot;: &quot;&quot;, &quot;platform&quot;: &quot;ANY&quot;, &quot;goog:chromeOptions&quot;: {&quot;extensions&quot;: [], &quot;args&quot;: []}}}
+remote_connection.py       567 DEBUG    Finished Request</div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-name">test_case/test_baidu_search.py::test_baidu_a_setting</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="image/test_baidu_search.py_test_baidu_a_setting.png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    def test_baidu_a_setting(browser):<br/>&gt;       bd = BaiduPage(browser)<br/><br/>test_case\test_baidu_search.py:15: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;page_obj.baidu_page.BaiduPage object at 0x00000251CE913358&gt;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    def __init__(self, browser=&#x27;ff&#x27;):<br/>        &#x27;&#x27;&#x27;<br/>            Run class initialization method, the default is proper<br/>            to drive the Firefox browser. Of course, you can also<br/>            pass parameter for other browser, Chrome browser for the &quot;Chrome&quot;,<br/>            the Internet Explorer browser for &quot;internet explorer&quot; or &quot;ie&quot;.<br/>            &#x27;&#x27;&#x27;<br/>        if browser == &quot;firefox&quot; or browser == &quot;ff&quot;:<br/>            self.driver = webdriver.Firefox()<br/>        elif browser == &quot;chrome&quot;:<br/>            self.driver = webdriver.Chrome()<br/>        elif browser == &quot;internet explorer&quot; or browser == &quot;ie&quot;:<br/>            self.driver = webdriver.Ie()<br/>        elif browser == &quot;opera&quot;:<br/>            self.driver = webdriver.Opera()<br/>        elif browser == &quot;chrome_headless&quot;:<br/>            chrome_options = Options()<br/>            chrome_options.add_argument(&#x27;--headless&#x27;)<br/>            self.driver = webdriver.Chrome(chrome_options=chrome_options)<br/>        elif browser == &#x27;edge&#x27;:<br/>            self.driver = webdriver.Edge()<br/>        else:<br/>            raise NameError(<br/>&gt;               &quot;Not found %s browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.&quot; % browser)<br/><span class="error">E           NameError: Not found &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt; browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.</span><br/><br/>page_obj\webdriver2.py:47: NameError<br/>------------------------------ Captured log setup ------------------------------<br/>remote_connection.py       480 DEBUG    POST http://127.0.0.1:50799/session {&quot;capabilities&quot;: {&quot;firstMatch&quot;: [{}], &quot;alwaysMatch&quot;: {&quot;browserName&quot;: &quot;chrome&quot;, &quot;platformName&quot;: &quot;any&quot;, &quot;goog:chromeOptions&quot;: {&quot;extensions&quot;: [], &quot;args&quot;: []}}}, &quot;desiredCapabilities&quot;: {&quot;browserName&quot;: &quot;chrome&quot;, &quot;version&quot;: &quot;&quot;, &quot;platform&quot;: &quot;ANY&quot;, &quot;goog:chromeOptions&quot;: {&quot;extensions&quot;: [], &quot;args&quot;: []}}}
+remote_connection.py       567 DEBUG    Finished Request</div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-name">test_case/test_baidu_search.py::test_baidu_a_setting</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="image/test_baidu_search.py_test_baidu_a_setting.png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    def test_baidu_a_setting(browser):<br/>&gt;       bd = BaiduPage(browser)<br/><br/>test_case\test_baidu_search.py:15: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;page_obj.baidu_page.BaiduPage object at 0x00000251CE913D30&gt;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    def __init__(self, browser=&#x27;ff&#x27;):<br/>        &#x27;&#x27;&#x27;<br/>            Run class initialization method, the default is proper<br/>            to drive the Firefox browser. Of course, you can also<br/>            pass parameter for other browser, Chrome browser for the &quot;Chrome&quot;,<br/>            the Internet Explorer browser for &quot;internet explorer&quot; or &quot;ie&quot;.<br/>            &#x27;&#x27;&#x27;<br/>        if browser == &quot;firefox&quot; or browser == &quot;ff&quot;:<br/>            self.driver = webdriver.Firefox()<br/>        elif browser == &quot;chrome&quot;:<br/>            self.driver = webdriver.Chrome()<br/>        elif browser == &quot;internet explorer&quot; or browser == &quot;ie&quot;:<br/>            self.driver = webdriver.Ie()<br/>        elif browser == &quot;opera&quot;:<br/>            self.driver = webdriver.Opera()<br/>        elif browser == &quot;chrome_headless&quot;:<br/>            chrome_options = Options()<br/>            chrome_options.add_argument(&#x27;--headless&#x27;)<br/>            self.driver = webdriver.Chrome(chrome_options=chrome_options)<br/>        elif browser == &#x27;edge&#x27;:<br/>            self.driver = webdriver.Edge()<br/>        else:<br/>            raise NameError(<br/>&gt;               &quot;Not found %s browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.&quot; % browser)<br/><span class="error">E           NameError: Not found &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt; browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.</span><br/><br/>page_obj\webdriver2.py:47: NameError<br/>------------------------------ Captured log setup ------------------------------<br/>remote_connection.py       480 DEBUG    POST http://127.0.0.1:50799/session {&quot;capabilities&quot;: {&quot;firstMatch&quot;: [{}], &quot;alwaysMatch&quot;: {&quot;browserName&quot;: &quot;chrome&quot;, &quot;platformName&quot;: &quot;any&quot;, &quot;goog:chromeOptions&quot;: {&quot;extensions&quot;: [], &quot;args&quot;: []}}}, &quot;desiredCapabilities&quot;: {&quot;browserName&quot;: &quot;chrome&quot;, &quot;version&quot;: &quot;&quot;, &quot;platform&quot;: &quot;ANY&quot;, &quot;goog:chromeOptions&quot;: {&quot;extensions&quot;: [], &quot;args&quot;: []}}}
+remote_connection.py       567 DEBUG    Finished Request</div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-name">test_case/test_baidu_search.py::test_baidu_search[python]</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="image/test_baidu_search.py_test_baidu_search[python].png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">searchkey = &#x27;python&#x27;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    @pytest.mark.parametrize(<br/>        (&quot;searchkey&quot;),<br/>        [&quot;python&quot;, &quot;pytest&quot;,&quot;pytest-html&quot;,&quot;selenium&quot;,&quot;unittest&quot;]<br/>        )<br/>    def test_baidu_search(searchkey, browser):<br/>&gt;       bd= BaiduPage(browser)<br/><br/>test_case\test_baidu_search.py:28: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;page_obj.baidu_page.BaiduPage object at 0x00000251CE908940&gt;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    def __init__(self, browser=&#x27;ff&#x27;):<br/>        &#x27;&#x27;&#x27;<br/>            Run class initialization method, the default is proper<br/>            to drive the Firefox browser. Of course, you can also<br/>            pass parameter for other browser, Chrome browser for the &quot;Chrome&quot;,<br/>            the Internet Explorer browser for &quot;internet explorer&quot; or &quot;ie&quot;.<br/>            &#x27;&#x27;&#x27;<br/>        if browser == &quot;firefox&quot; or browser == &quot;ff&quot;:<br/>            self.driver = webdriver.Firefox()<br/>        elif browser == &quot;chrome&quot;:<br/>            self.driver = webdriver.Chrome()<br/>        elif browser == &quot;internet explorer&quot; or browser == &quot;ie&quot;:<br/>            self.driver = webdriver.Ie()<br/>        elif browser == &quot;opera&quot;:<br/>            self.driver = webdriver.Opera()<br/>        elif browser == &quot;chrome_headless&quot;:<br/>            chrome_options = Options()<br/>            chrome_options.add_argument(&#x27;--headless&#x27;)<br/>            self.driver = webdriver.Chrome(chrome_options=chrome_options)<br/>        elif browser == &#x27;edge&#x27;:<br/>            self.driver = webdriver.Edge()<br/>        else:<br/>            raise NameError(<br/>&gt;               &quot;Not found %s browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.&quot; % browser)<br/><span class="error">E           NameError: Not found &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt; browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.</span><br/><br/>page_obj\webdriver2.py:47: NameError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-name">test_case/test_baidu_search.py::test_baidu_search[python]</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="image/test_baidu_search.py_test_baidu_search[python].png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">searchkey = &#x27;python&#x27;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    @pytest.mark.parametrize(<br/>        (&quot;searchkey&quot;),<br/>        [&quot;python&quot;, &quot;pytest&quot;,&quot;pytest-html&quot;,&quot;selenium&quot;,&quot;unittest&quot;]<br/>        )<br/>    def test_baidu_search(searchkey, browser):<br/>&gt;       bd= BaiduPage(browser)<br/><br/>test_case\test_baidu_search.py:28: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;page_obj.baidu_page.BaiduPage object at 0x00000251CE928EB8&gt;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    def __init__(self, browser=&#x27;ff&#x27;):<br/>        &#x27;&#x27;&#x27;<br/>            Run class initialization method, the default is proper<br/>            to drive the Firefox browser. Of course, you can also<br/>            pass parameter for other browser, Chrome browser for the &quot;Chrome&quot;,<br/>            the Internet Explorer browser for &quot;internet explorer&quot; or &quot;ie&quot;.<br/>            &#x27;&#x27;&#x27;<br/>        if browser == &quot;firefox&quot; or browser == &quot;ff&quot;:<br/>            self.driver = webdriver.Firefox()<br/>        elif browser == &quot;chrome&quot;:<br/>            self.driver = webdriver.Chrome()<br/>        elif browser == &quot;internet explorer&quot; or browser == &quot;ie&quot;:<br/>            self.driver = webdriver.Ie()<br/>        elif browser == &quot;opera&quot;:<br/>            self.driver = webdriver.Opera()<br/>        elif browser == &quot;chrome_headless&quot;:<br/>            chrome_options = Options()<br/>            chrome_options.add_argument(&#x27;--headless&#x27;)<br/>            self.driver = webdriver.Chrome(chrome_options=chrome_options)<br/>        elif browser == &#x27;edge&#x27;:<br/>            self.driver = webdriver.Edge()<br/>        else:<br/>            raise NameError(<br/>&gt;               &quot;Not found %s browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.&quot; % browser)<br/><span class="error">E           NameError: Not found &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt; browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.</span><br/><br/>page_obj\webdriver2.py:47: NameError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-name">test_case/test_baidu_search.py::test_baidu_search[python]</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="image/test_baidu_search.py_test_baidu_search[python].png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">searchkey = &#x27;python&#x27;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    @pytest.mark.parametrize(<br/>        (&quot;searchkey&quot;),<br/>        [&quot;python&quot;, &quot;pytest&quot;,&quot;pytest-html&quot;,&quot;selenium&quot;,&quot;unittest&quot;]<br/>        )<br/>    def test_baidu_search(searchkey, browser):<br/>&gt;       bd= BaiduPage(browser)<br/><br/>test_case\test_baidu_search.py:28: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;page_obj.baidu_page.BaiduPage object at 0x00000251CE9464A8&gt;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    def __init__(self, browser=&#x27;ff&#x27;):<br/>        &#x27;&#x27;&#x27;<br/>            Run class initialization method, the default is proper<br/>            to drive the Firefox browser. Of course, you can also<br/>            pass parameter for other browser, Chrome browser for the &quot;Chrome&quot;,<br/>            the Internet Explorer browser for &quot;internet explorer&quot; or &quot;ie&quot;.<br/>            &#x27;&#x27;&#x27;<br/>        if browser == &quot;firefox&quot; or browser == &quot;ff&quot;:<br/>            self.driver = webdriver.Firefox()<br/>        elif browser == &quot;chrome&quot;:<br/>            self.driver = webdriver.Chrome()<br/>        elif browser == &quot;internet explorer&quot; or browser == &quot;ie&quot;:<br/>            self.driver = webdriver.Ie()<br/>        elif browser == &quot;opera&quot;:<br/>            self.driver = webdriver.Opera()<br/>        elif browser == &quot;chrome_headless&quot;:<br/>            chrome_options = Options()<br/>            chrome_options.add_argument(&#x27;--headless&#x27;)<br/>            self.driver = webdriver.Chrome(chrome_options=chrome_options)<br/>        elif browser == &#x27;edge&#x27;:<br/>            self.driver = webdriver.Edge()<br/>        else:<br/>            raise NameError(<br/>&gt;               &quot;Not found %s browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.&quot; % browser)<br/><span class="error">E           NameError: Not found &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt; browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.</span><br/><br/>page_obj\webdriver2.py:47: NameError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-name">test_case/test_baidu_search.py::test_baidu_search[pytest]</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="image/test_baidu_search.py_test_baidu_search[pytest].png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">searchkey = &#x27;pytest&#x27;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    @pytest.mark.parametrize(<br/>        (&quot;searchkey&quot;),<br/>        [&quot;python&quot;, &quot;pytest&quot;,&quot;pytest-html&quot;,&quot;selenium&quot;,&quot;unittest&quot;]<br/>        )<br/>    def test_baidu_search(searchkey, browser):<br/>&gt;       bd= BaiduPage(browser)<br/><br/>test_case\test_baidu_search.py:28: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;page_obj.baidu_page.BaiduPage object at 0x00000251CE934828&gt;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    def __init__(self, browser=&#x27;ff&#x27;):<br/>        &#x27;&#x27;&#x27;<br/>            Run class initialization method, the default is proper<br/>            to drive the Firefox browser. Of course, you can also<br/>            pass parameter for other browser, Chrome browser for the &quot;Chrome&quot;,<br/>            the Internet Explorer browser for &quot;internet explorer&quot; or &quot;ie&quot;.<br/>            &#x27;&#x27;&#x27;<br/>        if browser == &quot;firefox&quot; or browser == &quot;ff&quot;:<br/>            self.driver = webdriver.Firefox()<br/>        elif browser == &quot;chrome&quot;:<br/>            self.driver = webdriver.Chrome()<br/>        elif browser == &quot;internet explorer&quot; or browser == &quot;ie&quot;:<br/>            self.driver = webdriver.Ie()<br/>        elif browser == &quot;opera&quot;:<br/>            self.driver = webdriver.Opera()<br/>        elif browser == &quot;chrome_headless&quot;:<br/>            chrome_options = Options()<br/>            chrome_options.add_argument(&#x27;--headless&#x27;)<br/>            self.driver = webdriver.Chrome(chrome_options=chrome_options)<br/>        elif browser == &#x27;edge&#x27;:<br/>            self.driver = webdriver.Edge()<br/>        else:<br/>            raise NameError(<br/>&gt;               &quot;Not found %s browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.&quot; % browser)<br/><span class="error">E           NameError: Not found &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt; browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.</span><br/><br/>page_obj\webdriver2.py:47: NameError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-name">test_case/test_baidu_search.py::test_baidu_search[pytest]</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="image/test_baidu_search.py_test_baidu_search[pytest].png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">searchkey = &#x27;pytest&#x27;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    @pytest.mark.parametrize(<br/>        (&quot;searchkey&quot;),<br/>        [&quot;python&quot;, &quot;pytest&quot;,&quot;pytest-html&quot;,&quot;selenium&quot;,&quot;unittest&quot;]<br/>        )<br/>    def test_baidu_search(searchkey, browser):<br/>&gt;       bd= BaiduPage(browser)<br/><br/>test_case\test_baidu_search.py:28: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;page_obj.baidu_page.BaiduPage object at 0x00000251CE9634E0&gt;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    def __init__(self, browser=&#x27;ff&#x27;):<br/>        &#x27;&#x27;&#x27;<br/>            Run class initialization method, the default is proper<br/>            to drive the Firefox browser. Of course, you can also<br/>            pass parameter for other browser, Chrome browser for the &quot;Chrome&quot;,<br/>            the Internet Explorer browser for &quot;internet explorer&quot; or &quot;ie&quot;.<br/>            &#x27;&#x27;&#x27;<br/>        if browser == &quot;firefox&quot; or browser == &quot;ff&quot;:<br/>            self.driver = webdriver.Firefox()<br/>        elif browser == &quot;chrome&quot;:<br/>            self.driver = webdriver.Chrome()<br/>        elif browser == &quot;internet explorer&quot; or browser == &quot;ie&quot;:<br/>            self.driver = webdriver.Ie()<br/>        elif browser == &quot;opera&quot;:<br/>            self.driver = webdriver.Opera()<br/>        elif browser == &quot;chrome_headless&quot;:<br/>            chrome_options = Options()<br/>            chrome_options.add_argument(&#x27;--headless&#x27;)<br/>            self.driver = webdriver.Chrome(chrome_options=chrome_options)<br/>        elif browser == &#x27;edge&#x27;:<br/>            self.driver = webdriver.Edge()<br/>        else:<br/>            raise NameError(<br/>&gt;               &quot;Not found %s browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.&quot; % browser)<br/><span class="error">E           NameError: Not found &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt; browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.</span><br/><br/>page_obj\webdriver2.py:47: NameError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-name">test_case/test_baidu_search.py::test_baidu_search[pytest]</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="image/test_baidu_search.py_test_baidu_search[pytest].png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">searchkey = &#x27;pytest&#x27;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    @pytest.mark.parametrize(<br/>        (&quot;searchkey&quot;),<br/>        [&quot;python&quot;, &quot;pytest&quot;,&quot;pytest-html&quot;,&quot;selenium&quot;,&quot;unittest&quot;]<br/>        )<br/>    def test_baidu_search(searchkey, browser):<br/>&gt;       bd= BaiduPage(browser)<br/><br/>test_case\test_baidu_search.py:28: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;page_obj.baidu_page.BaiduPage object at 0x00000251CE98C128&gt;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    def __init__(self, browser=&#x27;ff&#x27;):<br/>        &#x27;&#x27;&#x27;<br/>            Run class initialization method, the default is proper<br/>            to drive the Firefox browser. Of course, you can also<br/>            pass parameter for other browser, Chrome browser for the &quot;Chrome&quot;,<br/>            the Internet Explorer browser for &quot;internet explorer&quot; or &quot;ie&quot;.<br/>            &#x27;&#x27;&#x27;<br/>        if browser == &quot;firefox&quot; or browser == &quot;ff&quot;:<br/>            self.driver = webdriver.Firefox()<br/>        elif browser == &quot;chrome&quot;:<br/>            self.driver = webdriver.Chrome()<br/>        elif browser == &quot;internet explorer&quot; or browser == &quot;ie&quot;:<br/>            self.driver = webdriver.Ie()<br/>        elif browser == &quot;opera&quot;:<br/>            self.driver = webdriver.Opera()<br/>        elif browser == &quot;chrome_headless&quot;:<br/>            chrome_options = Options()<br/>            chrome_options.add_argument(&#x27;--headless&#x27;)<br/>            self.driver = webdriver.Chrome(chrome_options=chrome_options)<br/>        elif browser == &#x27;edge&#x27;:<br/>            self.driver = webdriver.Edge()<br/>        else:<br/>            raise NameError(<br/>&gt;               &quot;Not found %s browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.&quot; % browser)<br/><span class="error">E           NameError: Not found &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt; browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.</span><br/><br/>page_obj\webdriver2.py:47: NameError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-name">test_case/test_baidu_search.py::test_baidu_search[pytest-html]</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="image/test_baidu_search.py_test_baidu_search[pytest-html].png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">searchkey = &#x27;pytest-html&#x27;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    @pytest.mark.parametrize(<br/>        (&quot;searchkey&quot;),<br/>        [&quot;python&quot;, &quot;pytest&quot;,&quot;pytest-html&quot;,&quot;selenium&quot;,&quot;unittest&quot;]<br/>        )<br/>    def test_baidu_search(searchkey, browser):<br/>&gt;       bd= BaiduPage(browser)<br/><br/>test_case\test_baidu_search.py:28: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;page_obj.baidu_page.BaiduPage object at 0x00000251CE97D1D0&gt;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    def __init__(self, browser=&#x27;ff&#x27;):<br/>        &#x27;&#x27;&#x27;<br/>            Run class initialization method, the default is proper<br/>            to drive the Firefox browser. Of course, you can also<br/>            pass parameter for other browser, Chrome browser for the &quot;Chrome&quot;,<br/>            the Internet Explorer browser for &quot;internet explorer&quot; or &quot;ie&quot;.<br/>            &#x27;&#x27;&#x27;<br/>        if browser == &quot;firefox&quot; or browser == &quot;ff&quot;:<br/>            self.driver = webdriver.Firefox()<br/>        elif browser == &quot;chrome&quot;:<br/>            self.driver = webdriver.Chrome()<br/>        elif browser == &quot;internet explorer&quot; or browser == &quot;ie&quot;:<br/>            self.driver = webdriver.Ie()<br/>        elif browser == &quot;opera&quot;:<br/>            self.driver = webdriver.Opera()<br/>        elif browser == &quot;chrome_headless&quot;:<br/>            chrome_options = Options()<br/>            chrome_options.add_argument(&#x27;--headless&#x27;)<br/>            self.driver = webdriver.Chrome(chrome_options=chrome_options)<br/>        elif browser == &#x27;edge&#x27;:<br/>            self.driver = webdriver.Edge()<br/>        else:<br/>            raise NameError(<br/>&gt;               &quot;Not found %s browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.&quot; % browser)<br/><span class="error">E           NameError: Not found &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt; browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.</span><br/><br/>page_obj\webdriver2.py:47: NameError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-name">test_case/test_baidu_search.py::test_baidu_search[pytest-html]</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="image/test_baidu_search.py_test_baidu_search[pytest-html].png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">searchkey = &#x27;pytest-html&#x27;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    @pytest.mark.parametrize(<br/>        (&quot;searchkey&quot;),<br/>        [&quot;python&quot;, &quot;pytest&quot;,&quot;pytest-html&quot;,&quot;selenium&quot;,&quot;unittest&quot;]<br/>        )<br/>    def test_baidu_search(searchkey, browser):<br/>&gt;       bd= BaiduPage(browser)<br/><br/>test_case\test_baidu_search.py:28: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;page_obj.baidu_page.BaiduPage object at 0x00000251CE97D710&gt;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    def __init__(self, browser=&#x27;ff&#x27;):<br/>        &#x27;&#x27;&#x27;<br/>            Run class initialization method, the default is proper<br/>            to drive the Firefox browser. Of course, you can also<br/>            pass parameter for other browser, Chrome browser for the &quot;Chrome&quot;,<br/>            the Internet Explorer browser for &quot;internet explorer&quot; or &quot;ie&quot;.<br/>            &#x27;&#x27;&#x27;<br/>        if browser == &quot;firefox&quot; or browser == &quot;ff&quot;:<br/>            self.driver = webdriver.Firefox()<br/>        elif browser == &quot;chrome&quot;:<br/>            self.driver = webdriver.Chrome()<br/>        elif browser == &quot;internet explorer&quot; or browser == &quot;ie&quot;:<br/>            self.driver = webdriver.Ie()<br/>        elif browser == &quot;opera&quot;:<br/>            self.driver = webdriver.Opera()<br/>        elif browser == &quot;chrome_headless&quot;:<br/>            chrome_options = Options()<br/>            chrome_options.add_argument(&#x27;--headless&#x27;)<br/>            self.driver = webdriver.Chrome(chrome_options=chrome_options)<br/>        elif browser == &#x27;edge&#x27;:<br/>            self.driver = webdriver.Edge()<br/>        else:<br/>            raise NameError(<br/>&gt;               &quot;Not found %s browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.&quot; % browser)<br/><span class="error">E           NameError: Not found &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt; browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.</span><br/><br/>page_obj\webdriver2.py:47: NameError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-name">test_case/test_baidu_search.py::test_baidu_search[pytest-html]</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="image/test_baidu_search.py_test_baidu_search[pytest-html].png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">searchkey = &#x27;pytest-html&#x27;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    @pytest.mark.parametrize(<br/>        (&quot;searchkey&quot;),<br/>        [&quot;python&quot;, &quot;pytest&quot;,&quot;pytest-html&quot;,&quot;selenium&quot;,&quot;unittest&quot;]<br/>        )<br/>    def test_baidu_search(searchkey, browser):<br/>&gt;       bd= BaiduPage(browser)<br/><br/>test_case\test_baidu_search.py:28: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;page_obj.baidu_page.BaiduPage object at 0x00000251CE9953C8&gt;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    def __init__(self, browser=&#x27;ff&#x27;):<br/>        &#x27;&#x27;&#x27;<br/>            Run class initialization method, the default is proper<br/>            to drive the Firefox browser. Of course, you can also<br/>            pass parameter for other browser, Chrome browser for the &quot;Chrome&quot;,<br/>            the Internet Explorer browser for &quot;internet explorer&quot; or &quot;ie&quot;.<br/>            &#x27;&#x27;&#x27;<br/>        if browser == &quot;firefox&quot; or browser == &quot;ff&quot;:<br/>            self.driver = webdriver.Firefox()<br/>        elif browser == &quot;chrome&quot;:<br/>            self.driver = webdriver.Chrome()<br/>        elif browser == &quot;internet explorer&quot; or browser == &quot;ie&quot;:<br/>            self.driver = webdriver.Ie()<br/>        elif browser == &quot;opera&quot;:<br/>            self.driver = webdriver.Opera()<br/>        elif browser == &quot;chrome_headless&quot;:<br/>            chrome_options = Options()<br/>            chrome_options.add_argument(&#x27;--headless&#x27;)<br/>            self.driver = webdriver.Chrome(chrome_options=chrome_options)<br/>        elif browser == &#x27;edge&#x27;:<br/>            self.driver = webdriver.Edge()<br/>        else:<br/>            raise NameError(<br/>&gt;               &quot;Not found %s browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.&quot; % browser)<br/><span class="error">E           NameError: Not found &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt; browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.</span><br/><br/>page_obj\webdriver2.py:47: NameError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-name">test_case/test_baidu_search.py::test_baidu_search[selenium]</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="image/test_baidu_search.py_test_baidu_search[selenium].png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">searchkey = &#x27;selenium&#x27;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    @pytest.mark.parametrize(<br/>        (&quot;searchkey&quot;),<br/>        [&quot;python&quot;, &quot;pytest&quot;,&quot;pytest-html&quot;,&quot;selenium&quot;,&quot;unittest&quot;]<br/>        )<br/>    def test_baidu_search(searchkey, browser):<br/>&gt;       bd= BaiduPage(browser)<br/><br/>test_case\test_baidu_search.py:28: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;page_obj.baidu_page.BaiduPage object at 0x00000251CE9C0BE0&gt;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    def __init__(self, browser=&#x27;ff&#x27;):<br/>        &#x27;&#x27;&#x27;<br/>            Run class initialization method, the default is proper<br/>            to drive the Firefox browser. Of course, you can also<br/>            pass parameter for other browser, Chrome browser for the &quot;Chrome&quot;,<br/>            the Internet Explorer browser for &quot;internet explorer&quot; or &quot;ie&quot;.<br/>            &#x27;&#x27;&#x27;<br/>        if browser == &quot;firefox&quot; or browser == &quot;ff&quot;:<br/>            self.driver = webdriver.Firefox()<br/>        elif browser == &quot;chrome&quot;:<br/>            self.driver = webdriver.Chrome()<br/>        elif browser == &quot;internet explorer&quot; or browser == &quot;ie&quot;:<br/>            self.driver = webdriver.Ie()<br/>        elif browser == &quot;opera&quot;:<br/>            self.driver = webdriver.Opera()<br/>        elif browser == &quot;chrome_headless&quot;:<br/>            chrome_options = Options()<br/>            chrome_options.add_argument(&#x27;--headless&#x27;)<br/>            self.driver = webdriver.Chrome(chrome_options=chrome_options)<br/>        elif browser == &#x27;edge&#x27;:<br/>            self.driver = webdriver.Edge()<br/>        else:<br/>            raise NameError(<br/>&gt;               &quot;Not found %s browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.&quot; % browser)<br/><span class="error">E           NameError: Not found &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt; browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.</span><br/><br/>page_obj\webdriver2.py:47: NameError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-name">test_case/test_baidu_search.py::test_baidu_search[selenium]</td>
+          <td class="col-duration">0.02</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="image/test_baidu_search.py_test_baidu_search[selenium].png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">searchkey = &#x27;selenium&#x27;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    @pytest.mark.parametrize(<br/>        (&quot;searchkey&quot;),<br/>        [&quot;python&quot;, &quot;pytest&quot;,&quot;pytest-html&quot;,&quot;selenium&quot;,&quot;unittest&quot;]<br/>        )<br/>    def test_baidu_search(searchkey, browser):<br/>&gt;       bd= BaiduPage(browser)<br/><br/>test_case\test_baidu_search.py:28: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;page_obj.baidu_page.BaiduPage object at 0x00000251CE9CE0B8&gt;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    def __init__(self, browser=&#x27;ff&#x27;):<br/>        &#x27;&#x27;&#x27;<br/>            Run class initialization method, the default is proper<br/>            to drive the Firefox browser. Of course, you can also<br/>            pass parameter for other browser, Chrome browser for the &quot;Chrome&quot;,<br/>            the Internet Explorer browser for &quot;internet explorer&quot; or &quot;ie&quot;.<br/>            &#x27;&#x27;&#x27;<br/>        if browser == &quot;firefox&quot; or browser == &quot;ff&quot;:<br/>            self.driver = webdriver.Firefox()<br/>        elif browser == &quot;chrome&quot;:<br/>            self.driver = webdriver.Chrome()<br/>        elif browser == &quot;internet explorer&quot; or browser == &quot;ie&quot;:<br/>            self.driver = webdriver.Ie()<br/>        elif browser == &quot;opera&quot;:<br/>            self.driver = webdriver.Opera()<br/>        elif browser == &quot;chrome_headless&quot;:<br/>            chrome_options = Options()<br/>            chrome_options.add_argument(&#x27;--headless&#x27;)<br/>            self.driver = webdriver.Chrome(chrome_options=chrome_options)<br/>        elif browser == &#x27;edge&#x27;:<br/>            self.driver = webdriver.Edge()<br/>        else:<br/>            raise NameError(<br/>&gt;               &quot;Not found %s browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.&quot; % browser)<br/><span class="error">E           NameError: Not found &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt; browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.</span><br/><br/>page_obj\webdriver2.py:47: NameError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-name">test_case/test_baidu_search.py::test_baidu_search[selenium]</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="image/test_baidu_search.py_test_baidu_search[selenium].png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">searchkey = &#x27;selenium&#x27;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    @pytest.mark.parametrize(<br/>        (&quot;searchkey&quot;),<br/>        [&quot;python&quot;, &quot;pytest&quot;,&quot;pytest-html&quot;,&quot;selenium&quot;,&quot;unittest&quot;]<br/>        )<br/>    def test_baidu_search(searchkey, browser):<br/>&gt;       bd= BaiduPage(browser)<br/><br/>test_case\test_baidu_search.py:28: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;page_obj.baidu_page.BaiduPage object at 0x00000251CE9D50F0&gt;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    def __init__(self, browser=&#x27;ff&#x27;):<br/>        &#x27;&#x27;&#x27;<br/>            Run class initialization method, the default is proper<br/>            to drive the Firefox browser. Of course, you can also<br/>            pass parameter for other browser, Chrome browser for the &quot;Chrome&quot;,<br/>            the Internet Explorer browser for &quot;internet explorer&quot; or &quot;ie&quot;.<br/>            &#x27;&#x27;&#x27;<br/>        if browser == &quot;firefox&quot; or browser == &quot;ff&quot;:<br/>            self.driver = webdriver.Firefox()<br/>        elif browser == &quot;chrome&quot;:<br/>            self.driver = webdriver.Chrome()<br/>        elif browser == &quot;internet explorer&quot; or browser == &quot;ie&quot;:<br/>            self.driver = webdriver.Ie()<br/>        elif browser == &quot;opera&quot;:<br/>            self.driver = webdriver.Opera()<br/>        elif browser == &quot;chrome_headless&quot;:<br/>            chrome_options = Options()<br/>            chrome_options.add_argument(&#x27;--headless&#x27;)<br/>            self.driver = webdriver.Chrome(chrome_options=chrome_options)<br/>        elif browser == &#x27;edge&#x27;:<br/>            self.driver = webdriver.Edge()<br/>        else:<br/>            raise NameError(<br/>&gt;               &quot;Not found %s browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.&quot; % browser)<br/><span class="error">E           NameError: Not found &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt; browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.</span><br/><br/>page_obj\webdriver2.py:47: NameError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-name">test_case/test_baidu_search.py::test_baidu_search[unittest]</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="image/test_baidu_search.py_test_baidu_search[unittest].png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">searchkey = &#x27;unittest&#x27;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    @pytest.mark.parametrize(<br/>        (&quot;searchkey&quot;),<br/>        [&quot;python&quot;, &quot;pytest&quot;,&quot;pytest-html&quot;,&quot;selenium&quot;,&quot;unittest&quot;]<br/>        )<br/>    def test_baidu_search(searchkey, browser):<br/>&gt;       bd= BaiduPage(browser)<br/><br/>test_case\test_baidu_search.py:28: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;page_obj.baidu_page.BaiduPage object at 0x00000251CE9ED208&gt;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    def __init__(self, browser=&#x27;ff&#x27;):<br/>        &#x27;&#x27;&#x27;<br/>            Run class initialization method, the default is proper<br/>            to drive the Firefox browser. Of course, you can also<br/>            pass parameter for other browser, Chrome browser for the &quot;Chrome&quot;,<br/>            the Internet Explorer browser for &quot;internet explorer&quot; or &quot;ie&quot;.<br/>            &#x27;&#x27;&#x27;<br/>        if browser == &quot;firefox&quot; or browser == &quot;ff&quot;:<br/>            self.driver = webdriver.Firefox()<br/>        elif browser == &quot;chrome&quot;:<br/>            self.driver = webdriver.Chrome()<br/>        elif browser == &quot;internet explorer&quot; or browser == &quot;ie&quot;:<br/>            self.driver = webdriver.Ie()<br/>        elif browser == &quot;opera&quot;:<br/>            self.driver = webdriver.Opera()<br/>        elif browser == &quot;chrome_headless&quot;:<br/>            chrome_options = Options()<br/>            chrome_options.add_argument(&#x27;--headless&#x27;)<br/>            self.driver = webdriver.Chrome(chrome_options=chrome_options)<br/>        elif browser == &#x27;edge&#x27;:<br/>            self.driver = webdriver.Edge()<br/>        else:<br/>            raise NameError(<br/>&gt;               &quot;Not found %s browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.&quot; % browser)<br/><span class="error">E           NameError: Not found &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt; browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.</span><br/><br/>page_obj\webdriver2.py:47: NameError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-name">test_case/test_baidu_search.py::test_baidu_search[unittest]</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="image/test_baidu_search.py_test_baidu_search[unittest].png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">searchkey = &#x27;unittest&#x27;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    @pytest.mark.parametrize(<br/>        (&quot;searchkey&quot;),<br/>        [&quot;python&quot;, &quot;pytest&quot;,&quot;pytest-html&quot;,&quot;selenium&quot;,&quot;unittest&quot;]<br/>        )<br/>    def test_baidu_search(searchkey, browser):<br/>&gt;       bd= BaiduPage(browser)<br/><br/>test_case\test_baidu_search.py:28: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;page_obj.baidu_page.BaiduPage object at 0x00000251CE9D08D0&gt;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    def __init__(self, browser=&#x27;ff&#x27;):<br/>        &#x27;&#x27;&#x27;<br/>            Run class initialization method, the default is proper<br/>            to drive the Firefox browser. Of course, you can also<br/>            pass parameter for other browser, Chrome browser for the &quot;Chrome&quot;,<br/>            the Internet Explorer browser for &quot;internet explorer&quot; or &quot;ie&quot;.<br/>            &#x27;&#x27;&#x27;<br/>        if browser == &quot;firefox&quot; or browser == &quot;ff&quot;:<br/>            self.driver = webdriver.Firefox()<br/>        elif browser == &quot;chrome&quot;:<br/>            self.driver = webdriver.Chrome()<br/>        elif browser == &quot;internet explorer&quot; or browser == &quot;ie&quot;:<br/>            self.driver = webdriver.Ie()<br/>        elif browser == &quot;opera&quot;:<br/>            self.driver = webdriver.Opera()<br/>        elif browser == &quot;chrome_headless&quot;:<br/>            chrome_options = Options()<br/>            chrome_options.add_argument(&#x27;--headless&#x27;)<br/>            self.driver = webdriver.Chrome(chrome_options=chrome_options)<br/>        elif browser == &#x27;edge&#x27;:<br/>            self.driver = webdriver.Edge()<br/>        else:<br/>            raise NameError(<br/>&gt;               &quot;Not found %s browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.&quot; % browser)<br/><span class="error">E           NameError: Not found &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt; browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.</span><br/><br/>page_obj\webdriver2.py:47: NameError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-name">test_case/test_baidu_search.py::test_baidu_search[unittest]</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="image/test_baidu_search.py_test_baidu_search[unittest].png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">searchkey = &#x27;unittest&#x27;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    @pytest.mark.parametrize(<br/>        (&quot;searchkey&quot;),<br/>        [&quot;python&quot;, &quot;pytest&quot;,&quot;pytest-html&quot;,&quot;selenium&quot;,&quot;unittest&quot;]<br/>        )<br/>    def test_baidu_search(searchkey, browser):<br/>&gt;       bd= BaiduPage(browser)<br/><br/>test_case\test_baidu_search.py:28: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;page_obj.baidu_page.BaiduPage object at 0x00000251CEA00208&gt;<br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt;<br/><br/>    def __init__(self, browser=&#x27;ff&#x27;):<br/>        &#x27;&#x27;&#x27;<br/>            Run class initialization method, the default is proper<br/>            to drive the Firefox browser. Of course, you can also<br/>            pass parameter for other browser, Chrome browser for the &quot;Chrome&quot;,<br/>            the Internet Explorer browser for &quot;internet explorer&quot; or &quot;ie&quot;.<br/>            &#x27;&#x27;&#x27;<br/>        if browser == &quot;firefox&quot; or browser == &quot;ff&quot;:<br/>            self.driver = webdriver.Firefox()<br/>        elif browser == &quot;chrome&quot;:<br/>            self.driver = webdriver.Chrome()<br/>        elif browser == &quot;internet explorer&quot; or browser == &quot;ie&quot;:<br/>            self.driver = webdriver.Ie()<br/>        elif browser == &quot;opera&quot;:<br/>            self.driver = webdriver.Opera()<br/>        elif browser == &quot;chrome_headless&quot;:<br/>            chrome_options = Options()<br/>            chrome_options.add_argument(&#x27;--headless&#x27;)<br/>            self.driver = webdriver.Chrome(chrome_options=chrome_options)<br/>        elif browser == &#x27;edge&#x27;:<br/>            self.driver = webdriver.Edge()<br/>        else:<br/>            raise NameError(<br/>&gt;               &quot;Not found %s browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.&quot; % browser)<br/><span class="error">E           NameError: Not found &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b487f5852a58d499ec64f9c4ea6d398e&quot;)&gt; browser,You can enter &#x27;ie&#x27;, &#x27;ff&#x27;, &#x27;opera&#x27;, &#x27;edge&#x27;, &#x27;chrome&#x27; or &#x27;chrome_headless&#x27;.</span><br/><br/>page_obj\webdriver2.py:47: NameError<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_case/test_zzz_close.py::test_browser_close</td>
+          <td class="col-duration">3.06</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>remote_connection.py       480 DEBUG    DELETE http://127.0.0.1:50799/session/b487f5852a58d499ec64f9c4ea6d398e {&quot;sessionId&quot;: &quot;b487f5852a58d499ec64f9c4ea6d398e&quot;}
+remote_connection.py       567 DEBUG    Finished Request</div></td></tr></tbody></table></body></html>
